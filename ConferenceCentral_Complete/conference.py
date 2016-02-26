@@ -14,6 +14,7 @@ __author__ = 'wesc+api@google.com (Wesley Chun)'
 
 
 from datetime import datetime
+import logging
 
 import endpoints
 from protorpc import messages
@@ -36,6 +37,8 @@ from models import ConferenceForms
 from models import ConferenceQueryForm
 from models import ConferenceQueryForms
 from models import TeeShirtSize
+from models import Session
+from models import SessionForm
 
 from settings import WEB_CLIENT_ID
 from settings import ANDROID_CLIENT_ID
@@ -56,6 +59,16 @@ DEFAULTS = {
     "maxAttendees": 0,
     "seatsAvailable": 0,
     "topics": [ "Default", "Topic" ],
+}
+
+SESSION_DEFAULTS = {
+    "name": "Default Session",
+    "highlights": "No Highlights",
+    "speaker": "No Name",
+    "typeOfSession": "Tutorial",
+    "startTime": 0,
+    "duration": 0,
+    "location": "Default",
 }
 
 OPERATORS = {
@@ -549,6 +562,72 @@ class ConferenceApi(remote.Service):
         return ConferenceForms(
             items=[self._copyConferenceToForm(conf, "") for conf in q]
         )
+
+# - - - Session objects - - - - - - - - - - - - - - - - - - -
+    def _createSessionObject(self, request):
+        """Create or update Session object, returning SessionForm/request"""
+        # preload necessary data items
+        user = endpoints.get_current_user()
+        if not user:
+            raise endpoints.UnauthorizedException('Authorization required')
+        user_id = getUserId(user)
+
+        if not request.name:
+            raise endpoints.BadRequestException("Session 'name' field required")
+
+        # copy ConferenceForm/ProtoRPC Message into dict
+        data = {field.name: getattr(request, field.name) for field in request.all_fields()}
+
+        # add default values for those missing (both data model & outbound Message)
+        for df in SESSION_DEFAULTS:
+            if data[df] in (None, []):
+                data[df] = SESSION_DEFAULTS[df]
+                setattr(request, df, SESSION_DEFAULTS[df])
+
+        # Get the conference key
+        conference_key = ndb.Key(urlsafe=request.conferenceKey)
+
+        # Check for the existence of confernce key
+        if not conference_key:
+            raise endpoints.NotFoundException(
+                'No conference found with key: %s' % request.conferenceKey)
+
+        # Get conference object related with the key
+        try:
+            conference_object = ndb.Key(urlsafe=request.conferenceKey).get()
+        except Exception as error:
+            logging.error(
+                "Failure getting entity using key: '{0}', {1}".format(
+                    conference_key, str(error)))
+            conference_object = None
+
+
+        # Only allow the creator of Conference to add Sessions to it
+        if user_id != conference_object.organizerUserId:
+            raise endpoints.ForbiddenException(
+                "Only the conference organizer can add sessions.")
+
+        # generate session ID based on Conference
+        # ID and key get session key from the ID
+        new_session_id = Session.allocate_ids(size=1, parent=conference_key)[0]
+        session_key = ndb.Key(Session, new_session_id, parent=conference_key)
+        data['key'] = session_key
+
+        # delete extra field so that 'data' from SessionForm can be used
+        # to create Session object
+        del data['conferenceKey']
+
+        # Create session object
+        Session(**data).put()
+        return request
+
+
+    @endpoints.method(SessionForm, SessionForm,
+            path='conference/{conferenceKey}/session',
+            http_method='POST', name='createSession')
+    def createSession(self, request):
+        """Create a new session."""
+        return self._createSessionObject(request)
 
 
 api = endpoints.api_server([ConferenceApi]) # register API
