@@ -39,6 +39,8 @@ from models import ConferenceQueryForms
 from models import TeeShirtSize
 from models import Session
 from models import SessionForm
+from models import SessionForms
+
 
 from settings import WEB_CLIENT_ID
 from settings import ANDROID_CLIENT_ID
@@ -96,6 +98,12 @@ CONF_POST_REQUEST = endpoints.ResourceContainer(
     ConferenceForm,
     websafeConferenceKey=messages.StringField(1),
 )
+
+SESS_GET_REQUEST = endpoints.ResourceContainer(
+    message_types.VoidMessage,
+    conferenceKey=messages.StringField(1),
+)
+
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -564,6 +572,18 @@ class ConferenceApi(remote.Service):
         )
 
 # - - - Session objects - - - - - - - - - - - - - - - - - - -
+
+    def _copySessionToForm(self, ses):
+        """Copy Session to SessionForm"""
+        sf = SessionForm()
+        for field in sf.all_fields():
+            if hasattr(ses, field.name):
+                setattr(sf, field.name, getattr(ses, field.name))
+            elif field.name == 'conferenceKey':
+                setattr(sf, field.name, ses.key.urlsafe())
+        sf.check_initialized()
+        return sf
+
     def _createSessionObject(self, request):
         """Create or update Session object, returning SessionForm/request"""
         # preload necessary data items
@@ -628,6 +648,28 @@ class ConferenceApi(remote.Service):
     def createSession(self, request):
         """Create a new session."""
         return self._createSessionObject(request)
+
+
+    @endpoints.method(SESS_GET_REQUEST, SessionForms,
+            path='conference/{conferenceKey}/sessions',
+            http_method='GET', name='getConferenceSessions')
+    def getConferenceSessions(self, request):
+        """Return all session for a give coneference"""
+        # Get conference object related with the key
+        try:
+            conference_object = ndb.Key(urlsafe=request.conferenceKey).get()
+        except Exception as error:
+            logging.error(
+                "Failure getting entity using key: '{0}', {1}".format(
+                    conferenceKey, str(error)))
+            # conference_object = None
+
+        conference_sessions = Session.query(ancestor=conference_object.key)
+
+        return SessionForms(
+                    sessions=[self._copySessionToForm(conference_session)
+                    for conference_session in conference_sessions]
+                )
 
 
 api = endpoints.api_server([ConferenceApi]) # register API
