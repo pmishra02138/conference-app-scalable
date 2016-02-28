@@ -110,6 +110,11 @@ SESS_BY_TYPE_REQUEST = endpoints.ResourceContainer(
     typeOfSession=messages.StringField(2),
 )
 
+SESS_BY_SPEAKER_REQUEST = endpoints.ResourceContainer(
+    message_types.VoidMessage,
+    speaker=messages.StringField(1),
+)
+
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
@@ -699,5 +704,21 @@ class ConferenceApi(remote.Service):
                     sessions=[self._copySessionToForm(conference_session)
                     for conference_session in conference_sessions_by_type]
                 )
+
+
+    @endpoints.method(SESS_BY_SPEAKER_REQUEST, SessionForms,
+            path='conference/sessions/speakerName/{speaker}',
+            http_method='GET', name='getSessionsBySpeaker')
+    def getSessionsBySpeaker(self, request):
+        """Get all sessions by the specified speaker"""
+        session_query = Session.query()
+        sessions_by_speaker = session_query.filter(
+            Session.speaker==request.speaker)
+
+        return SessionForms(
+                    sessions=[self._copySessionToForm(sess)
+                    for sess in sessions_by_speaker]
+                )
+
 
 api = endpoints.api_server([ConferenceApi]) # register API
