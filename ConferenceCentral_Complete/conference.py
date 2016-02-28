@@ -104,6 +104,11 @@ SESS_GET_REQUEST = endpoints.ResourceContainer(
     conferenceKey=messages.StringField(1),
 )
 
+SESS_BY_TYPE_REQUEST = endpoints.ResourceContainer(
+    message_types.VoidMessage,
+    conferenceKey=messages.StringField(1),
+    typeOfSession=messages.StringField(2),
+)
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -671,5 +676,28 @@ class ConferenceApi(remote.Service):
                     for conference_session in conference_sessions]
                 )
 
+    @endpoints.method(SESS_BY_TYPE_REQUEST, SessionForms,
+            path='conference/{conferenceKey}/sessions/type/{typeOfSession}',
+            http_method='GET', name='getConferenceSessionsByType')
+    def getConferenceSessionsByType(self, request):
+        """Get all sessions for a conference by the specified type"""
+        # Get the confernce object related with the key
+        try:
+            conference_object = ndb.Key(urlsafe=request.conferenceKey).get()
+        except Exception as error:
+            logging.error(
+                "Failure getting entity using key: '{0}', {1}".format(
+                    conferenceKey, str(error)))
+
+        # Extract all session for the given conference
+        conference_sessions = Session.query(ancestor=conference_object.key)
+        # Extract sessions of a given type
+        conference_sessions_by_type = conference_sessions.filter(
+            Session.typeOfSession==request.typeOfSession).fetch()
+
+        return SessionForms(
+                    sessions=[self._copySessionToForm(conference_session)
+                    for conference_session in conference_sessions_by_type]
+                )
 
 api = endpoints.api_server([ConferenceApi]) # register API
