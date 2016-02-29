@@ -115,6 +115,11 @@ SESS_BY_SPEAKER_REQUEST = endpoints.ResourceContainer(
     speaker=messages.StringField(1),
 )
 
+SESS_WISHLIST_REQUEST = endpoints.ResourceContainer(
+    message_types.VoidMessage,
+    sessionKey=messages.StringField(1),
+)
+
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
@@ -718,6 +723,64 @@ class ConferenceApi(remote.Service):
         return SessionForms(
                     sessions=[self._copySessionToForm(sess)
                     for sess in sessions_by_speaker]
+                )
+
+# - - - Session wishlist - - - - - - - - - - - - - - - - - - -
+
+    def _addToWishlist(self, request, wlist=True):
+        retval = None
+        # Get suer profile
+        prof = self._getProfileFromUser()
+        sk = request.sessionKey
+
+        # add to wishlist
+        if wlist:
+            # check if user has already added this session
+            if sk in prof.sessionKeysWishlist:
+                raise ConflictException(
+                    "You have already registered for this conference")
+
+            # add
+            prof.sessionKeysWishlist.append(sk)
+            retval = True
+        # remove session from list
+        else:
+            if sk in prof.sessionKeysWishlist:
+                prof.sessionKeysWishlist.remove(sk)
+                retval = True
+            else:
+                retval = False
+
+        # write things back to the datastore & return
+        prof.put()
+        return BooleanMessage(data=retval)
+
+    @endpoints.method(SESS_WISHLIST_REQUEST, BooleanMessage,
+            path='profile/wishlist/{sessionKey}',
+            http_method='POST', name='addSessionToWishlist')
+    def addSessionToWishlist(self, request):
+        """Add a session to the wishlist"""
+        return self._addToWishlist(request)
+
+    @endpoints.method(SESS_WISHLIST_REQUEST, BooleanMessage,
+            path='profile/wishlist/{sessionKey}',
+            http_method='DELETE', name='deleteSessionInWishlist')
+    def deleteSessionInWishlist(self, request):
+        """Delete a session from the wishlist"""
+        return self._addToWishlist(request, wlist=False)
+
+    @endpoints.method(message_types.VoidMessage, SessionForms,
+            path='profile/wishlist',
+            http_method='GET', name='getSessionsInWishlist')
+    def getSessionsInWishlist(self, request):
+        """Get all sessions in the wishlist"""
+        prof = self._getProfileFromUser()
+        session_keys = [ndb.Key(urlsafe=sk) for sk in prof.sessionKeysWishlist]
+        sessions_in_wishlist = ndb.get_multi(session_keys)
+
+        return SessionForms(
+                    sessions=[self._copySessionToForm(sess)
+                    for sess in sessions_in_wishlist]
                 )
 
 
