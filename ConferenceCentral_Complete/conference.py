@@ -127,7 +127,7 @@ SESS_BY_DATE_REQUEST = endpoints.ResourceContainer(
 
 SESS_BY_START_TIME_REQUEST = endpoints.ResourceContainer(
     message_types.VoidMessage,
-    speaker=messages.StringField(1),
+    startTime=messages.StringField(1),
 )
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -809,7 +809,7 @@ class ConferenceApi(remote.Service):
             path='conference/sessions/date/{date}',
             http_method='GET', name='getSessionsByDate')
     def getSessionsByDate(self, request):
-        """Get all sessions for a give date"""
+        """Get all sessions for a given date"""
         session_query = Session.query()
         try:
             req_date = datetime.strptime(request.date, "%Y-%m-%d").date()
@@ -817,11 +817,12 @@ class ConferenceApi(remote.Service):
             raise endpoints.BadRequestException(
                 "Date must be in format YYYY-MM-DD.")
 
-        sessions_by_speaker = session_query.filter(Session.date==req_date)
+        sessions_by_date = session_query.filter(Session.date==req_date)
 
         return SessionForms(
                     sessions=[self._copySessionToForm(sess)
-                    for sess in sessions_by_speaker]
+                    for sess in sessions_by_date]
                 )
+
 
 api = endpoints.api_server([ConferenceApi]) # register API
