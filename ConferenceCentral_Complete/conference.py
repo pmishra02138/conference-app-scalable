@@ -120,6 +120,16 @@ SESS_WISHLIST_REQUEST = endpoints.ResourceContainer(
     sessionKey=messages.StringField(1),
 )
 
+SESS_BY_DATE_REQUEST = endpoints.ResourceContainer(
+    message_types.VoidMessage,
+    date=messages.StringField(1),
+)
+
+SESS_BY_START_TIME_REQUEST = endpoints.ResourceContainer(
+    message_types.VoidMessage,
+    speaker=messages.StringField(1),
+)
+
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
@@ -586,7 +596,7 @@ class ConferenceApi(remote.Service):
             items=[self._copyConferenceToForm(conf, "") for conf in q]
         )
 
-# - - - Session objects - - - - - - - - - - - - - - - - - - -
+# - - - Task 1: Add Sessions to a Conference - - - - - - - - - - - - - - - - - - -
 
     def _copySessionToForm(self, ses):
         """Copy Session to SessionForm"""
@@ -736,7 +746,7 @@ class ConferenceApi(remote.Service):
                     for sess in sessions_by_speaker]
                 )
 
-# - - - Session wishlist - - - - - - - - - - - - - - - - - - -
+# - - - Task 2: Add Sessions to User Wishlist - - - - - - - - - - - - - - - -
 
     def _addToWishlist(self, request, wlist=True):
         retval = None
@@ -794,5 +804,24 @@ class ConferenceApi(remote.Service):
                     for sess in sessions_in_wishlist]
                 )
 
+# - - - Task 3: Work on indexes and queries - - - - - - - - - - - - - - - -
+    @endpoints.method(SESS_BY_DATE_REQUEST, SessionForms,
+            path='conference/sessions/date/{date}',
+            http_method='GET', name='getSessionsByDate')
+    def getSessionsByDate(self, request):
+        """Get all sessions for a give date"""
+        session_query = Session.query()
+        try:
+            req_date = datetime.strptime(request.date, "%Y-%m-%d").date()
+        except ValueError:
+            raise endpoints.BadRequestException(
+                "Date must be in format YYYY-MM-DD.")
+
+        sessions_by_speaker = session_query.filter(Session.date==req_date)
+
+        return SessionForms(
+                    sessions=[self._copySessionToForm(sess)
+                    for sess in sessions_by_speaker]
+                )
 
 api = endpoints.api_server([ConferenceApi]) # register API
