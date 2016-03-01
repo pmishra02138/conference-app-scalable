@@ -824,5 +824,24 @@ class ConferenceApi(remote.Service):
                     for sess in sessions_by_date]
                 )
 
+    @endpoints.method(SESS_BY_START_TIME_REQUEST, SessionForms,
+            path='conference/sessions/startTime/{startTime}',
+            http_method='GET', name='getSessionsByStartTime')
+    def getSessionsByStartTime(self, request):
+        """Get all sessions startting at a specified time"""
+        session_query = Session.query()
+        try:
+            req_time = datetime.strptime(request.startTime, '%H:%M').time()
+        except ValueError:
+            raise endpoints.BadRequestException(
+                "Hour must be in format HH:MM.")
+
+        sessions_by_start_time = session_query.filter(Session.startTime==req_time)
+
+        return SessionForms(
+                    sessions=[self._copySessionToForm(sess)
+                    for sess in sessions_by_start_time]
+                )
+
 
 api = endpoints.api_server([ConferenceApi]) # register API
