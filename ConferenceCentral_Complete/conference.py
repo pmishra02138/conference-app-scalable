@@ -593,7 +593,11 @@ class ConferenceApi(remote.Service):
         sf = SessionForm()
         for field in sf.all_fields():
             if hasattr(ses, field.name):
-                setattr(sf, field.name, getattr(ses, field.name))
+                # convert date and startTime to sting object
+                if field.name in ('date', 'startTime'):
+                    setattr(sf, field.name, str(getattr(ses, field.name)))
+                else:
+                    setattr(sf, field.name, getattr(ses, field.name))
             elif field.name == 'conferenceKey':
                 setattr(sf, field.name, ses.key.urlsafe())
         sf.check_initialized()
@@ -618,6 +622,13 @@ class ConferenceApi(remote.Service):
             if data[df] in (None, []):
                 data[df] = SESSION_DEFAULTS[df]
                 setattr(request, df, SESSION_DEFAULTS[df])
+
+        # convert dates and start time from strings to Date Objects
+        if data['date']:
+            data['date'] = datetime.strptime(data['date'], "%Y-%m-%d").date()
+        if data['startTime']:
+            data['startTime'] = datetime.strptime(data['startTime'], '%H:%M').time()
+
 
         # Get the conference key
         conference_key = ndb.Key(urlsafe=request.conferenceKey)
