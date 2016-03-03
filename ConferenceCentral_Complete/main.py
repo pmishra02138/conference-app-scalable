@@ -15,7 +15,12 @@ __author__ = 'wesc+api@google.com (Wesley Chun)'
 import webapp2
 from google.appengine.api import app_identity
 from google.appengine.api import mail
+from google.appengine.api import memcache
 from conference import ConferenceApi
+from google.appengine.ext import ndb
+
+from conference import ConferenceApi, MEMCACHE_FEATURED_SPEAKER
+from models import Session
 
 class SetAnnouncementHandler(webapp2.RequestHandler):
     def get(self):
@@ -38,7 +43,26 @@ class SendConfirmationEmailHandler(webapp2.RequestHandler):
         )
 
 
+class SaveFeaturedSpeaker(webapp2.RequestHandler):
+    def post(self):
+        """Save featured speaker"""
+
+        conf_obj = ndb.Key(urlsafe=self.request.get('conference_key')).get()
+        speaker_name = self.request.get('speaker_name')
+
+        # gather all sessions for this speaker
+        conf_sess_by_speaker = Session.query(ancestor=conf_obj.key).filter(
+            Session.speaker == speaker_name).fetch()
+
+
+        # If 2 or more sessions, set memcache
+        if len(conf_sess_by_speaker) > 1:
+            session_names = [session.name for session in conf_sess_by_speaker]
+            message = "{0}: {1}". format(speaker_name, ', '.join(session_names))
+            memcache.set(MEMCACHE_FEATURED_SPEAKER, message)
+
 app = webapp2.WSGIApplication([
     ('/crons/set_announcement', SetAnnouncementHandler),
     ('/tasks/send_confirmation_email', SendConfirmationEmailHandler),
+    ('/tasks/save_featured_speaker', SaveFeaturedSpeaker),
 ], debug=True)

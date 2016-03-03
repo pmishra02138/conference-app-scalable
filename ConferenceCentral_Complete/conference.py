@@ -54,6 +54,7 @@ API_EXPLORER_CLIENT_ID = endpoints.API_EXPLORER_CLIENT_ID
 MEMCACHE_ANNOUNCEMENTS_KEY = "RECENT_ANNOUNCEMENTS"
 ANNOUNCEMENT_TPL = ('Last chance to attend! The following conferences '
                     'are nearly sold out: %s')
+MEMCACHE_FEATURED_SPEAKER = "FEATURED SPEAKER"
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 DEFAULTS = {
@@ -675,6 +676,13 @@ class ConferenceApi(remote.Service):
 
         # Create session object
         Session(**data).put()
+
+        # Set up the taskqueue
+        taskqueue.add(params={
+                'conference_key': conference_object.key.urlsafe(),
+                'speaker_name': data['speaker']},
+                url = '/tasks/save_featured_speaker')
+
         return request
 
 
@@ -805,6 +813,7 @@ class ConferenceApi(remote.Service):
                 )
 
 # - - - Task 3: Work on indexes and queries - - - - - - - - - - - - - - - -
+
     @endpoints.method(SESS_BY_DATE_REQUEST, SessionForms,
             path='conference/sessions/date/{date}',
             http_method='GET', name='getSessionsByDate')
@@ -842,6 +851,15 @@ class ConferenceApi(remote.Service):
                     sessions=[self._copySessionToForm(sess)
                     for sess in sessions_by_start_time]
                 )
+
+# - - - Task 4: Add a task - - - - - - - - - - - - - - - -
+
+    @endpoints.method(message_types.VoidMessage, StringMessage,
+            path='announcement/featuredSpeaker',
+            http_method='GET', name='getFeaturedSpeaker')
+    def getFeaturedSpeaker(self, request):
+        """Return Announcement from memcache."""
+        return StringMessage(data=memcache.get(MEMCACHE_FEATURED_SPEAKER) or "")
 
 
 api = endpoints.api_server([ConferenceApi]) # register API
